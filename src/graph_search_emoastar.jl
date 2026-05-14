@@ -17,20 +17,6 @@ struct MOHGProb
 end
 
 
-
-# """
-#     MOHGSearch(dep_cond::SVector{2, Float64}, tar_cond::SVector{2, Float64}, des_space :: DesignSpace, flag_in2out::Bool, pump_down_only::Bool)
-    
-# Create a MOHGSearch structure defining the hopping graph search problem.
-
-# # Returns
-# - `MOHGSearch`: search problem definition
-# """
-# function MOHGProb(dep_cond::SVector{2, Float64}, tar_cond::SVector{2, Float64}, des_space :: DesignSpace, flag_in2out::Bool, pump_down_only::Bool)
-    
-#     return MOHGProb(dep_cond, tar_cond, des_space, flag_in2out, pump_down_only)
-# end
-
 """
    MOHGPath
    
@@ -44,23 +30,6 @@ struct MOHGPath
     seq_name :: Vector{String}
 end
 
-# """
-#     MOHGPath(ΔV_tot::Float64, ToF_tot::Float64, path_edges::Vector{Edge} , seq::Vector{KepTransfer}, seq_name::Vector{String})
-
-# Create a MOHGPath structure containing the information of a shortest path solution.
-
-# # Arguments
-# - `ΔV_tot::Float64`: total ΔV of the path [km/s]
-# - `ToF_tot::Float64`: total time of flight of the path [days or appropriate unit]
-# - `seq::Vector{KepTransfer}`: sequence of KepTransfer objects along the path
-# - `seq_name::Vector{String}`: sequence of transfer names along the path
-
-# # Returns
-# - `MOHGPath`: path solution
-# """
-# function MOHGPath(ΔV_tot::Float64, ToF_tot::Float64, path_edges::Vector{SimpleWeightedEdge} ,seq::Vector{KepTransfer}, seq_name::Vector{String})
-#     return MOHGPath(ΔV_tot, ToF_tot, path_edges, seq, seq_name);
-# end
 
 """
     prepare_MOHG_search(prob::WeightedHGProb, path::String)
@@ -69,11 +38,12 @@ Creates the .gr files for the given problem
 # Arguments
 - `prob::WeightedHGProb`: the hopping graph search problem to solve
 - `prob::String`: the path where to save the .gr files
+- `filename::String`: filename to identify .gr files
 
 # Returns
 - `Hop_Graph`: the hopping graph of the problem
 """
-function prepare_MOHG_search(prob::MOHGProb, path::String)
+function prepare_MOHG_search(prob::MOHGProb, path::String, filename::String="none")
     # Unpack problem parameters
     dep_cond = prob.dep_cond
     tar_cond = prob.tar_cond
@@ -96,14 +66,15 @@ function prepare_MOHG_search(prob::MOHGProb, path::String)
     ToF_array = [dvtof[2] for dvtof in dv_tof_array]
 
     # build .gr files
-    dv_filepath, tof_filepath = wrap_edgedef_ΔV_ToF(path, src_array, dst_array, ΔV_array, ToF_array)
+    dv_filepath, tof_filepath = wrap_edgedef_ΔV_ToF(path, src_array, dst_array, ΔV_array, ToF_array, filename)
     return Hop_Graph
 
 end
 
 
+
 """
-    wrap_edgedef_ΔV_ToF(des_space_path::String, src_array::Vector{Int64}, dst_array::Vector{Int64}, ΔV_array::Vector{Float64}, ToF_array::Vector{Float64})
+    wrap_edgedef_ΔV_ToF(des_space_path::String, src_array::Vector{Int64}, dst_array::Vector{Int64}, ΔV_array::Vector{Float64}, ToF_array::Vector{Float64}, filename::String="none")
 
 Given the edge definition arrays (src ids, dst ids and ΔV and ToF costs) it creates 2 .gr files in DIMACS format, ready to be fed to EMOA* c++ implementation.
 
@@ -113,6 +84,7 @@ Given the edge definition arrays (src ids, dst ids and ΔV and ToF costs) it cre
 - `dst_array::Vector{Int64}`: Destination node IDs for each edge
 - `ΔV_array::Vector{Float64}`: ΔV costs for each edge [m/s]
 - `ToF_array::Vector{Float64}`: Time of flight for each edge [days]
+- `filename::String`: filename to identify .gr files
 
 # Output Files
 - `graph_dv.gr`: Graph file with ΔV as edge weights
@@ -123,7 +95,7 @@ The files follow the DIMACS shortest path format:
 - Problem line: `p sp <nodes> <edges>`
 - Arc lines: `a <src> <dst> <weight>`
 """
-function wrap_edgedef_ΔV_ToF(des_space_path::String, src_array::Vector{Int64}, dst_array::Vector{Int64}, ΔV_array::Vector{Float64}, ToF_array::Vector{Float64})
+function wrap_edgedef_ΔV_ToF(des_space_path::String, src_array::Vector{Int64}, dst_array::Vector{Int64}, ΔV_array::Vector{Float64}, ToF_array::Vector{Float64},filename::String="none")
     
     # Validate input arrays have same length
     n_edges = length(src_array)
@@ -137,9 +109,14 @@ function wrap_edgedef_ΔV_ToF(des_space_path::String, src_array::Vector{Int64}, 
     println("Creating DIMACS graph files with $n_nodes nodes and $n_edges edges")
     
     # Create output file paths
-    dv_filepath = joinpath(des_space_path, "graph_dv.gr")
-    tof_filepath = joinpath(des_space_path, "graph_tof.gr")
-    
+    if filename != "none"
+        dv_filepath = joinpath(des_space_path, filename * "_dv.gr")
+        tof_filepath = joinpath(des_space_path, filename * "_tof.gr")
+    else
+        dv_filepath = joinpath(des_space_path, "_graph_dv.gr")
+        tof_filepath = joinpath(des_space_path, "_graph_tof.gr")
+    end
+
     # Write ΔV graph file
     open(dv_filepath, "w") do io
         # Write problem line
